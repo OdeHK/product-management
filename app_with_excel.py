@@ -120,7 +120,6 @@ if uploaded_file is not None:
         items = sorted(df_all['ProductItem'].unique())
         selected = st.sidebar.selectbox("Chọn Product Item", items)
         df = df_all[df_all['ProductItem'] == selected].copy()
-        df = df.sort_values('Date').reset_index(drop=True)
         
         if not df.empty:
             values = df['Measure'].values
@@ -351,4 +350,5 @@ else:
         2. Chọn Product Item cần phân tích
         3. Điều chỉnh USL, LSL, Target theo yêu cầu
         4. Xem các biểu đồ và phân tích
+
         """)
