@@ -276,115 +276,122 @@ if uploaded_file is not None:
                 st.plotly_chart(fig_hist, use_container_width=True)
                         
             with col2:
-                st.markdown("**Q-Q Plot (Normal Probability)**")
+                st.markdown("**Normal Probability Plot**")
                 
-                # Tính quantiles
+                # Sắp xếp dữ liệu
                 sorted_val = np.sort(values)
-                p = (np.arange(1, n+1) - 0.5) / n
-                theoretical_quantiles = stats.norm.ppf(p, 0, 1)  # Standard normal
                 
-                # Chuẩn hóa dữ liệu
-                standardized_data = (sorted_val - mean) / sigma
+                # Tính phần trăm tích lũy (percentile)
+                # Sử dụng công thức (i - 0.5) / n để tránh 0% và 100%
+                percentiles = (np.arange(1, n+1) - 0.5) / n * 100
                 
-                # Tính đường fit và R²
-                slope, intercept = np.polyfit(theoretical_quantiles, standardized_data, 1)
-                fitted_line = slope * theoretical_quantiles + intercept
+                # Tính theoretical quantiles từ phân phối chuẩn
+                z_scores = stats.norm.ppf(percentiles / 100, mean, sigma)
                 
-                # Tính R² cho correlation
-                correlation = np.corrcoef(theoretical_quantiles, standardized_data)[0, 1]
+                # Tính đường fit tuyến tính
+                slope, intercept = np.polyfit(sorted_val, percentiles, 1)
+                fitted_line = slope * sorted_val + intercept
+                
+                # Tính R² 
+                correlation = np.corrcoef(sorted_val, percentiles)[0, 1]
                 r_squared = correlation ** 2
                 
                 # Tính confidence band 95%
-                se = np.sqrt(np.sum((standardized_data - fitted_line)**2) / (n - 2))
-                # Critical value for 95% confidence
+                se = np.sqrt(np.sum((percentiles - fitted_line)**2) / (n - 2))
                 t_val = stats.t.ppf(0.975, n - 2)
                 
-                # Confidence interval
-                x_mean = np.mean(theoretical_quantiles)
-                sxx = np.sum((theoretical_quantiles - x_mean)**2)
-                margin = t_val * se * np.sqrt(1/n + (theoretical_quantiles - x_mean)**2 / sxx)
+                # Confidence intervals
+                x_mean = np.mean(sorted_val)
+                sxx = np.sum((sorted_val - x_mean)**2)
+                margin = t_val * se * np.sqrt(1/n + (sorted_val - x_mean)**2 / sxx)
                 upper_band = fitted_line + margin
                 lower_band = fitted_line - margin
                 
-                # Vẽ Q-Q Plot
-                fig_qq = go.Figure()
+                # Vẽ Normal Probability Plot
+                fig_prob = go.Figure()
                 
-                # Confidence bands (vùng tin cậy)
-                fig_qq.add_trace(go.Scatter(
-                    x=theoretical_quantiles,
+                # Confidence bands (vùng tin cậy màu đỏ)
+                fig_prob.add_trace(go.Scatter(
+                    x=sorted_val,
                     y=upper_band,
                     mode='lines',
-                    line=dict(color='red', width=1, dash='dash'),
-                    name='95% CI',
+                    line=dict(color='red', width=2),
+                    name='95% CI Upper',
                     showlegend=False
                 ))
-                fig_qq.add_trace(go.Scatter(
-                    x=theoretical_quantiles,
+                fig_prob.add_trace(go.Scatter(
+                    x=sorted_val,
                     y=lower_band,
                     mode='lines',
-                    line=dict(color='red', width=1, dash='dash'),
+                    line=dict(color='red', width=2),
                     fill='tonexty',
-                    fillcolor='rgba(255, 0, 0, 0.1)',
-                    name='95% CI',
+                    fillcolor='rgba(255, 200, 200, 0.3)',
+                    name='95% CI Lower',
                     showlegend=False
                 ))
                 
-                # Đường fit chính
-                fig_qq.add_trace(go.Scatter(
-                    x=theoretical_quantiles,
+                # Đường fit chính (đen)
+                fig_prob.add_trace(go.Scatter(
+                    x=sorted_val,
                     y=fitted_line,
                     mode='lines',
-                    line=dict(color='gray', width=2),
+                    line=dict(color='black', width=2),
                     name='Fit Line',
                     showlegend=False
                 ))
                 
-                # Data points
-                fig_qq.add_trace(go.Scatter(
-                    x=theoretical_quantiles,
-                    y=standardized_data,
+                # Data points (dấu + xanh lam)
+                fig_prob.add_trace(go.Scatter(
+                    x=sorted_val,
+                    y=percentiles,
                     mode='markers',
-                    marker=dict(color='blue', size=8),
+                    marker=dict(
+                        color='cyan',
+                        size=10,
+                        symbol='cross',
+                        line=dict(width=2)
+                    ),
                     name='Data',
                     showlegend=False
                 ))
                 
-                # Thêm R² annotation
-                fig_qq.add_annotation(
-                    x=0.95, y=0.05,
-                    xref='paper', yref='paper',
-                    text=f'R² = {r_squared:.3f}',
-                    showarrow=False,
-                    font=dict(size=14),
-                    bgcolor='white',
-                    bordercolor='black',
-                    borderwidth=1
-                )
-                
-                fig_qq.update_layout(
+                # Layout
+                fig_prob.update_layout(
                     height=450,
-                    xaxis_title="Theoretical quantiles",
-                    yaxis_title="Ordered quantiles",
-                    title="Q-Q Plot",
+                    xaxis_title="测试结果 Test Result",
+                    yaxis_title="Percent",
                     plot_bgcolor="white",
                     xaxis=dict(
                         showgrid=True,
                         gridcolor="lightgray",
-                        zeroline=True,
-                        zerolinecolor='black',
-                        zerolinewidth=1
+                        zeroline=False
                     ),
                     yaxis=dict(
                         showgrid=True,
                         gridcolor="lightgray",
-                        zeroline=True,
-                        zerolinecolor='black',
-                        zerolinewidth=1
+                        zeroline=False,
+                        # Trục Y theo phong cách probability plot
+                        tickvals=[1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 99],
+                        ticktext=['1', '5', '10', '20', '30', '40', '50', '60', '70', '80', '90', '95', '99'],
+                        range=[0, 100]
                     ),
                     margin=dict(l=50, r=50, t=50, b=50)
                 )
                 
-                st.plotly_chart(fig_qq, use_container_width=True)
+                st.plotly_chart(fig_prob, use_container_width=True)
+                
+                # Hiển thị R² và Anderson-Darling test
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    st.metric("R² (Goodness of Fit)", f"{r_squared:.4f}")
+                with col_b:
+                    # Anderson-Darling test cho normality
+                    ad_result = stats.anderson(values, dist='norm')
+                    ad_stat = ad_result.statistic
+                    # Critical value tại 5% significance level
+                    critical_5pct = ad_result.critical_values[2]  # index 2 = 5%
+                    is_normal = "✓ Normal" if ad_stat < critical_5pct else "✗ Not Normal"
+                    st.metric("Anderson-Darling", f"{ad_stat:.3f} ({is_normal})")
 
             # ========================
             # PROCESS CAPABILITY
@@ -450,4 +457,5 @@ else:
         4. Xem các biểu đồ và phân tích
 
         """)
+
 
