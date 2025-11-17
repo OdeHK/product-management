@@ -127,7 +127,6 @@ if uploaded_file is not None:
         items = sorted(df_all['ProductItem'].unique())
         selected = st.sidebar.selectbox("Chọn Product Item", items)
         df = df_all[df_all['ProductItem'] == selected].copy()
-        df = df.sort_values('Date').reset_index(drop=True)
         
         if not df.empty:
             values = df['Measure'].values
