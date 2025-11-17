@@ -276,17 +276,115 @@ if uploaded_file is not None:
                 st.plotly_chart(fig_hist, use_container_width=True)
                         
             with col2:
-                st.markdown("**Normal Probability Plot**")
+                st.markdown("**Q-Q Plot (Normal Probability)**")
+                
+                # Tính quantiles
                 sorted_val = np.sort(values)
                 p = (np.arange(1, n+1) - 0.5) / n
-                theo = stats.norm.ppf(p, mean, sigma)
-                fig_pp = go.Figure()
-                fig_pp.add_scatter(x=sorted_val, y=p*100, mode='markers', name='Data')
-                slope, intercept = np.polyfit(theo, sorted_val, 1)
-                line = slope * theo + intercept
-                fig_pp.add_scatter(x=line, y=p*100, mode='lines', line=dict(color='red'), name='Fit')
-                fig_pp.update_layout(height=400, yaxis=dict(tickvals=[1,5,10,20,50,80,90,95,99]))
-                st.plotly_chart(fig_pp, use_container_width=True)
+                theoretical_quantiles = stats.norm.ppf(p, 0, 1)  # Standard normal
+                
+                # Chuẩn hóa dữ liệu
+                standardized_data = (sorted_val - mean) / sigma
+                
+                # Tính đường fit và R²
+                slope, intercept = np.polyfit(theoretical_quantiles, standardized_data, 1)
+                fitted_line = slope * theoretical_quantiles + intercept
+                
+                # Tính R² cho correlation
+                correlation = np.corrcoef(theoretical_quantiles, standardized_data)[0, 1]
+                r_squared = correlation ** 2
+                
+                # Tính confidence band 95%
+                se = np.sqrt(np.sum((standardized_data - fitted_line)**2) / (n - 2))
+                # Critical value for 95% confidence
+                t_val = stats.t.ppf(0.975, n - 2)
+                
+                # Confidence interval
+                x_mean = np.mean(theoretical_quantiles)
+                sxx = np.sum((theoretical_quantiles - x_mean)**2)
+                margin = t_val * se * np.sqrt(1/n + (theoretical_quantiles - x_mean)**2 / sxx)
+                upper_band = fitted_line + margin
+                lower_band = fitted_line - margin
+                
+                # Vẽ Q-Q Plot
+                fig_qq = go.Figure()
+                
+                # Confidence bands (vùng tin cậy)
+                fig_qq.add_trace(go.Scatter(
+                    x=theoretical_quantiles,
+                    y=upper_band,
+                    mode='lines',
+                    line=dict(color='red', width=1, dash='dash'),
+                    name='95% CI',
+                    showlegend=False
+                ))
+                fig_qq.add_trace(go.Scatter(
+                    x=theoretical_quantiles,
+                    y=lower_band,
+                    mode='lines',
+                    line=dict(color='red', width=1, dash='dash'),
+                    fill='tonexty',
+                    fillcolor='rgba(255, 0, 0, 0.1)',
+                    name='95% CI',
+                    showlegend=False
+                ))
+                
+                # Đường fit chính
+                fig_qq.add_trace(go.Scatter(
+                    x=theoretical_quantiles,
+                    y=fitted_line,
+                    mode='lines',
+                    line=dict(color='gray', width=2),
+                    name='Fit Line',
+                    showlegend=False
+                ))
+                
+                # Data points
+                fig_qq.add_trace(go.Scatter(
+                    x=theoretical_quantiles,
+                    y=standardized_data,
+                    mode='markers',
+                    marker=dict(color='blue', size=8),
+                    name='Data',
+                    showlegend=False
+                ))
+                
+                # Thêm R² annotation
+                fig_qq.add_annotation(
+                    x=0.95, y=0.05,
+                    xref='paper', yref='paper',
+                    text=f'R² = {r_squared:.3f}',
+                    showarrow=False,
+                    font=dict(size=14),
+                    bgcolor='white',
+                    bordercolor='black',
+                    borderwidth=1
+                )
+                
+                fig_qq.update_layout(
+                    height=450,
+                    xaxis_title="Theoretical quantiles",
+                    yaxis_title="Ordered quantiles",
+                    title="Q-Q Plot",
+                    plot_bgcolor="white",
+                    xaxis=dict(
+                        showgrid=True,
+                        gridcolor="lightgray",
+                        zeroline=True,
+                        zerolinecolor='black',
+                        zerolinewidth=1
+                    ),
+                    yaxis=dict(
+                        showgrid=True,
+                        gridcolor="lightgray",
+                        zeroline=True,
+                        zerolinecolor='black',
+                        zerolinewidth=1
+                    ),
+                    margin=dict(l=50, r=50, t=50, b=50)
+                )
+                
+                st.plotly_chart(fig_qq, use_container_width=True)
 
             # ========================
             # PROCESS CAPABILITY
@@ -352,3 +450,4 @@ else:
         4. Xem các biểu đồ và phân tích
 
         """)
+
