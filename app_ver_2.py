@@ -26,8 +26,7 @@ def load_excel_data(uploaded_file):
         
         # Chuẩn hóa Measure
         if 'Measure' in df.columns:
-            df['Measure'] = df['Measure'].astype(str).str.strip()\
-                .str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
+            df['Measure'] = df['Measure'].astype(str).str.strip()
             df['Measure'] = pd.to_numeric(df['Measure'], errors='coerce')
         
         # Chuẩn hóa các cột khác
