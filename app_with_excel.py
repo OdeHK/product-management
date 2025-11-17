@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 import plotly.graph_objects as go
+import matplotlib.pyplot as plt
 from scipy import stats
 
 # ========================
@@ -281,115 +282,115 @@ if uploaded_file is not None:
                 # Sắp xếp dữ liệu
                 sorted_val = np.sort(values)
                 
-                # Tính phần trăm tích lũy (percentile)
-                # Sử dụng công thức (i - 0.5) / n để tránh 0% và 100%
-                percentiles = (np.arange(1, n+1) - 0.5) / n * 100
+                # Tính plotting position theo công thức Blom: (i-0.5)/n
+                plotting_positions = (np.arange(1, n+1) - 0.5) / n
+                percentiles = plotting_positions * 100
                 
-                # Tính theoretical quantiles từ phân phối chuẩn
-                z_scores = stats.norm.ppf(percentiles / 100, mean, sigma)
+                # Convert percentile → z-score (theoretical quantiles)
+                z = stats.norm.ppf(plotting_positions)
                 
-                # Tính đường fit tuyến tính
-                slope, intercept = np.polyfit(sorted_val, percentiles, 1)
-                fitted_line = slope * sorted_val + intercept
+                # ===== ĐÚNG: Q-Q PLOT STYLE =====
+                # Trục X = theoretical values (từ phân phối chuẩn chuẩn hóa)
+                # Trục Y = actual data values
+                # → Đường fitted sẽ THẲNG!
                 
-                # Tính R² 
-                correlation = np.corrcoef(sorted_val, percentiles)[0, 1]
+                # Theoretical quantiles (chuẩn hóa về scale của data)
+                theoretical_quantiles = mean + sigma * z
+                
+                # Tính đường fit tuyến tính: y = ax + b
+                # Với normal data: slope ≈ 1, intercept ≈ 0 (nếu chuẩn hóa)
+                slope, intercept = np.polyfit(theoretical_quantiles, sorted_val, 1)
+                fitted_line = slope * theoretical_quantiles + intercept
+                
+                # Tính R²
+                correlation = np.corrcoef(sorted_val, theoretical_quantiles)[0, 1]
                 r_squared = correlation ** 2
                 
-                # Tính confidence band 95%
-                se = np.sqrt(np.sum((percentiles - fitted_line)**2) / (n - 2))
-                t_val = stats.t.ppf(0.975, n - 2)
+                # ===== CONFIDENCE BAND =====
+                # Dạng "envelope" hẹp giữa, rộng 2 đầu
+                # Sử dụng công thức: width ∝ sqrt(p(1-p)/n)
                 
-                # Confidence intervals
-                x_mean = np.mean(sorted_val)
-                sxx = np.sum((sorted_val - x_mean)**2)
-                margin = t_val * se * np.sqrt(1/n + (sorted_val - x_mean)**2 / sxx)
-                upper_band = fitted_line + margin
-                lower_band = fitted_line - margin
+                # Standard error tại mỗi percentile
+                se_percentile = np.sqrt(plotting_positions * (1 - plotting_positions) / n)
                 
-                # Vẽ Normal Probability Plot
-                fig_prob = go.Figure()
+                # Critical value cho 95% CI
+                z_crit = stats.norm.ppf(0.75)  # 1.96
                 
-                # Confidence bands (vùng tin cậy màu đỏ)
-                fig_prob.add_trace(go.Scatter(
-                    x=sorted_val,
-                    y=upper_band,
-                    mode='lines',
-                    line=dict(color='red', width=2),
-                    name='95% CI Upper',
-                    showlegend=False
-                ))
-                fig_prob.add_trace(go.Scatter(
-                    x=sorted_val,
-                    y=lower_band,
-                    mode='lines',
-                    line=dict(color='red', width=2),
-                    fill='tonexty',
-                    fillcolor='rgba(255, 200, 200, 0.3)',
-                    name='95% CI Lower',
-                    showlegend=False
-                ))
+                # Margin tính theo percentile, rồi chuyển sang value
+                # Công thức: SE(y) = σ × SE(percentile) / φ(z)
+                pdf_z = stats.norm.pdf(z)
+                se_value = sigma * se_percentile / (pdf_z + 1e-10)  # Tránh chia 0
                 
-                # Đường fit chính (đen)
-                fig_prob.add_trace(go.Scatter(
-                    x=sorted_val,
-                    y=fitted_line,
-                    mode='lines',
-                    line=dict(color='black', width=2),
-                    name='Fit Line',
-                    showlegend=False
-                ))
+                # Confidence bounds (trên trục Y - giá trị data)
+                ci_width = z_crit * se_value * 2.5  # Hệ số 2.5 để band rộng hơn
+                upper_bound_y = fitted_line + ci_width
+                lower_bound_y = fitted_line - ci_width
+                
+                # ===== VẼ BẰNG MATPLOTLIB =====
+                import matplotlib.pyplot as plt
+                
+                fig, ax = plt.subplots(figsize=(6, 5))
+                
+                # Confidence bands (hình chữ V ngược)
+                ax.plot(theoretical_quantiles, upper_bound_y, color='red', linewidth=2)
+                ax.plot(theoretical_quantiles, lower_bound_y, color='red', linewidth=2)
+                ax.fill_between(theoretical_quantiles, lower_bound_y, upper_bound_y, 
+                               color='red', alpha=0.2)
+                
+                # Fitted line (ĐƯỜNG THẲNG)
+                ax.plot(theoretical_quantiles, fitted_line, color='black', linewidth=2)
                 
                 # Data points (dấu + xanh lam)
-                fig_prob.add_trace(go.Scatter(
-                    x=sorted_val,
-                    y=percentiles,
-                    mode='markers',
-                    marker=dict(
-                        color='cyan',
-                        size=10,
-                        symbol='cross',
-                        line=dict(width=2)
-                    ),
-                    name='Data',
-                    showlegend=False
-                ))
+                ax.scatter(theoretical_quantiles, sorted_val, marker='+', s=80, 
+                          color='cyan', linewidths=2.5, zorder=10)
                 
-                # Layout
-                fig_prob.update_layout(
-                    height=450,
-                    xaxis_title="测试结果 Test Result",
-                    yaxis_title="Percent",
-                    plot_bgcolor="white",
-                    xaxis=dict(
-                        showgrid=True,
-                        gridcolor="lightgray",
-                        zeroline=False
-                    ),
-                    yaxis=dict(
-                        showgrid=True,
-                        gridcolor="lightgray",
-                        zeroline=False,
-                        # Trục Y theo phong cách probability plot
-                        tickvals=[1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 99],
-                        ticktext=['1', '5', '10', '20', '30', '40', '50', '60', '70', '80', '90', '95', '99'],
-                        range=[0, 100]
-                    ),
-                    margin=dict(l=50, r=50, t=50, b=50)
-                )
+                # ===== Format trục =====
+                # Trục Y: hiển thị theo percentile (nhưng plot theo value)
+                # Chuyển đổi percentile → value tương ứng
+                percentile_ticks = [1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 99]
+                z_ticks = [stats.norm.ppf(p/100) for p in percentile_ticks]
+                value_ticks = [mean + sigma * z_t for z_t in z_ticks]
                 
-                st.plotly_chart(fig_prob, use_container_width=True)
+                # Set limits
+                y_min = min(sorted_val.min(), lower_bound_y.min())
+                y_max = max(sorted_val.max(), upper_bound_y.max())
+                y_range = y_max - y_min
+                ax.set_ylim(y_min - 0.02*y_range, y_max + 0.02*y_range)
                 
-                # Hiển thị R² và Anderson-Darling test
+                x_min = theoretical_quantiles.min()
+                x_max = theoretical_quantiles.max()
+                x_range = x_max - x_min
+                ax.set_xlim(x_min - 0.05*x_range, x_max + 0.05*x_range)
+                
+                # Labels
+                ax.set_xlabel("Test Result", fontsize=11)
+                ax.set_ylabel("Percent", fontsize=11)
+                
+                # Tạo secondary y-axis để hiển thị percentile
+                ax2 = ax.twinx()
+                ax2.set_ylim(ax.get_ylim())
+                ax2.set_yticks(value_ticks)
+                ax2.set_yticklabels(percentile_ticks)
+                ax2.set_ylabel("")
+                
+                # Grid và background
+                ax.grid(color='lightgray', alpha=0.7, linestyle='-', linewidth=0.5)
+                ax.set_facecolor('white')
+                
+                fig.tight_layout()
+                
+                st.pyplot(fig)
+                plt.close(fig)
+                
+                # Hiển thị thống kê
                 col_a, col_b = st.columns(2)
                 with col_a:
                     st.metric("R² (Goodness of Fit)", f"{r_squared:.4f}")
                 with col_b:
-                    # Anderson-Darling test cho normality
+                    # Anderson-Darling test
                     ad_result = stats.anderson(values, dist='norm')
                     ad_stat = ad_result.statistic
-                    # Critical value tại 5% significance level
-                    critical_5pct = ad_result.critical_values[2]  # index 2 = 5%
+                    critical_5pct = ad_result.critical_values[2]
                     is_normal = "✓ Normal" if ad_stat < critical_5pct else "✗ Not Normal"
                     st.metric("Anderson-Darling", f"{ad_stat:.3f} ({is_normal})")
 
@@ -457,5 +458,6 @@ else:
         4. Xem các biểu đồ và phân tích
 
         """)
+
 
 
